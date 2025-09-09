@@ -3,7 +3,7 @@ placeholder=(
 "Describe the situation clearly: context, issue, error codes, impacted customer(s), prior steps taken, "
 "what you need the AI to produce, and any constraints (word count, brand name, links)."
 ),
-(height=180,
+(height==180,
 )
 
 
