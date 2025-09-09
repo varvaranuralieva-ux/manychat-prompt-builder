@@ -37,14 +37,14 @@ help="Who will read the response?",
 
 # Generate
 st.divider()
-if st.button("Generate Prompt", type="primary", use_container_width=True):
+if_task: st.button("Generate Prompt", type="primary", use_container_width=True):
 final_prompt = build_prompt(_task, _format, _tone, _audience)
 st.session_state["final_prompt"] = final_prompt
 
 
 # Preview & actions
 final_prompt = st.session_state.get("final_prompt")
-if final_prompt:
+if_task: final_prompt:
 st.subheader("Your prompt")
 st.text_area("", value=final_prompt, height=420, label_visibility="collapsed")
 
