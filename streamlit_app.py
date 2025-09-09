@@ -1,131 +1,171 @@
-import textwrap
-from datetime import datetime
+# app.py
 import streamlit as st
-from streamlit.components.v1 import html
+from datetime import datetime
+from textwrap import dedent
 
-st.set_page_config(
-    page_title="Generative AI Prompt Template Builder",
-    page_icon="🤖",
-    layout="centered",
-)
+APP_NAME = "Generative AI Prompt Template Tool"
+st.set_page_config(page_title=APP_NAME, page_icon="🤖", layout="wide")
 
-def build_prompt(task: str, output_format: str, tone: str, audience: str) -> str:
-    task = (task or "").strip()
-    format_instructions = {
-        "email": "Write the response as a clear, well-structured email.",
-        "Slack message": "Write the response as a concise Slack message (1–5 short paragraphs, use bullets when helpful).",
-        "Slack post": "Write the response as a Slack post suitable for a channel announcement (title + short sections + bullet points).",
-        "knowledge base article draft": (
-            "Write the response as a knowledge base article draft (title, summary, prerequisites, step-by-step sections, and a short FAQ)."
-        ),
-    }
-    tone_text = tone.strip() if tone else "in a professional and polite tone"
-
-    prompt_sections = [
-        "ROLE:",
-        "You are a customer support agent.",
-        "",
-        "AUDIENCE:",
-        f"Write to the {audience.strip() if audience else 'customer'}.",
-        "",
-        "TASK:",
-        task if task else "<Describe the issue, error codes, context, history, previous attempts, and desired outcome>",
-        "",
-        "OUTPUT FORMAT:",
-        format_instructions.get(output_format, "Provide the response in a clear and readable format."),
-        "",
-        "TONE:",
-        f"Write {tone_text}.",
-        "",
-        "CONSTRAINTS & SAFETY:",
-        "- Use customer-safe language; avoid internal jargon or sensitive info.",
-        "- Replace private data with placeholders like <customer_name>, <ticket_id>, <order_number>.",
-        "- If critical details are missing, ask clarifying questions first in a short list.",
-        "- Be accurate, concise, and solution-oriented.",
-        "- Prefer plain language; avoid long, complex sentences.",
-        "",
-        "QUALITY CHECK BEFORE FINALIZING:",
-        "- Ensure the goal is explicit and the steps are actionable.",
-        "- Confirm the tone matches the audience and channel.",
-        "- Include next steps or links to relevant resources when appropriate.",
-    ]
-    return "\n".join(prompt_sections).strip()
-
-st.title("Generative AI Prompt Template Builder")
-st.caption("Create effective, safe prompts for support use-cases — fast.")
+st.title("🤖 Generative AI Prompt Template Tool")
+st.caption("Build clear, safe, and effective prompts for support scenarios — ready to paste into your AI chat tool.")
 
 with st.expander("Tips for best results", expanded=True):
     st.markdown(
         """
-        1. **Keep customer-safe language**; avoid internal jargon or sensitive information. Use placeholders instead of private data.
-        2. **Ensure all important info is in the _Task_ field** (context, issue description, error codes, account IDs, links, constraints, etc.).
-        3. **Make your goal explicit and specific** (what a great answer looks like, success criteria, and any limits like word count or format).
+1. **Keep customer‑safe language**; avoid internal jargon or sensitive information. Use **placeholders** instead of private data (e.g., `<customer_name>`, `<account_id>`).
+2. **Put all important information in the _Task_ field** — context, problem/issue description, relevant steps tried, timestamps, error codes, links to public docs. **Do not include sensitive data.**
+3. **Make the goal explicit** — what you want the AI to do (e.g., draft reply, summarize issue, propose next steps, create KB draft).
         """
     )
 
-st.subheader("Build your prompt")
+st.divider()
 
-st.text_input("Role", value="customer support agent", disabled=True)
+# -------------------------
+# Inputs
+# -------------------------
+col1, col2 = st.columns([1,1])
 
-_task = st.text_area(
-    "Task",
-    placeholder=(
-        "Describe the situation clearly: context, issue, error codes, impacted customer(s), prior steps taken, "
-        "what you need the AI to produce, and any constraints (word count, brand name, links)."
-    ),
-    height=180,
-)
+with col1:
+    role = st.selectbox("Role", ["Customer support agent"], index=0,
+                        help="The perspective the AI should take.")
+    task = st.text_area(
+        "Task (free text)",
+        placeholder="Describe the situation, context, goal, and any relevant facts.\n"
+                    "Avoid sensitive data. Include public links or placeholders.",
+        height=200,
+    )
 
-_format = st.selectbox(
-    "Format",
-    ["email", "Slack message", "Slack post", "knowledge base article draft"],
-)
+with col2:
+    output_format = st.selectbox(
+        "Output format",
+        ["Email", "Slack message", "Slack post", "Knowledge base article draft"],
+        help="How you want the AI to structure the response."
+    )
 
-_tone = st.selectbox(
-    "Tone",
-    [
-        "in a professional and polite tone",
-        "in a polite and casual colleague-oriented tone",
-        "in a professional, friendly, and empathetic tone",
-    ],
-)
+    tone = st.selectbox(
+        "Tone",
+        [
+            "Professional and polite",
+            "Polite and casual, colleague‑oriented",
+            "Professional, friendly, and empathetic",
+        ],
+        help="Choose the voice appropriate for the audience and situation."
+    )
 
-_audience = st.selectbox(
-    "Audience",
-    ["customer", "other Manychat employee"],
+    audience = st.selectbox(
+        "Audience",
+        ["Customer", "Other Manychat employee"],
+        help="Who will receive the final content."
+    )
+
+st.divider()
+
+# -------------------------
+# Advanced options
+# -------------------------
+with st.expander("Advanced options (optional)"):
+    lang = st.text_input("Preferred language (e.g., 'English', 'Turkish')", value="English")
+    max_length = st.slider("Max length (approx. words)", 80, 800, 250, step=10)
+    include_checklist = st.checkbox("Append review checklist for the agent", value=True)
+    include_placeholders_block = st.checkbox("Include common placeholders block at top", value=True)
+    include_safety = st.checkbox("Include safety & privacy reminders to the model", value=True)
+
+# -------------------------
+# Prompt builder
+# -------------------------
+def build_prompt(role, task, output_format, tone, audience, lang, max_length,
+                 include_checklist, include_placeholders_block, include_safety):
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    placeholders = dedent("""\
+        <placeholders>
+        - <customer_name>
+        - <account_id>
+        - <subscription_plan>
+        - <ticket_id>
+        - <order_id>
+        - <error_code>
+        - <public_doc_link>
+        </placeholders>
+    """)
+
+    safety = dedent("""\
+        Safety & Privacy:
+        - Do not invent or expose internal data, pricing, roadmaps, or credentials.
+        - If information is missing or sensitive, explicitly ask for a safe placeholder.
+        - Follow customer‑safe language; avoid internal jargon.
+    """)
+
+    review = dedent("""\
+        Review checklist (for the human agent before sending):
+        - ✅ Accurate and consistent with known facts
+        - ✅ No sensitive/internal information; placeholders used where needed
+        - ✅ Tone matches audience and situation
+        - ✅ Clear next steps or resolution path
+        - ✅ Links are public and correct
+    """)
+
+    header_blocks = []
+    if include_placeholders_block:
+        header_blocks.append(placeholders)
+    if include_safety:
+        header_blocks.append(safety)
+
+    header = "\n".join(header_blocks).strip()
+
+    # Map output format to brief guidance
+    fmt_guidance = {
+        "Email": "Structure with greeting, brief context, solution/next steps, and closing signature.",
+        "Slack message": "Keep it concise with bullet points and action items.",
+        "Slack post": "Use a clear headline, summary, bullets, and action items for visibility.",
+        "Knowledge base article draft": "Include title, summary, prerequisites, step‑by‑step instructions, and troubleshooting."
+    }
+
+    prompt_template = dedent(f"""
+        You are acting as a **{role}**.
+        Write in **{lang}** for the **{audience}**.
+        Use a **{tone}** tone.
+        Produce a **{output_format}**. Target length: ~{max_length} words.
+
+        {f"{header}\n" if header else ""}
+        Objective:
+        - Based on the Task below, produce a clear, accurate, and helpful {output_format.lower()}.
+        - {fmt_guidance[output_format]}
+
+        Task (source information; may include placeholders; do not expose sensitive data):
+        ---
+        {task.strip() if task else "[Task not provided]"}
+        ---
+
+        Requirements:
+        - Be self‑contained and easy to understand for the {audience.lower()}.
+        - If data is missing, note assumptions and suggest what to request next.
+        - Use customer‑safe language and avoid internal jargon.
+        - Include step‑by‑step guidance or next actions when relevant.
+        - Keep the structure scannable (short paragraphs, bullets).
+        - Do not fabricate details.
+
+        Output:
+        - Write only the final {output_format.lower()} with no extra preamble.
+    """).strip()
+
+    if include_checklist:
+        prompt_template += "\n\n" + review
+
+    return prompt_template
+
+prompt_text = build_prompt(role, task, output_format, tone, audience, lang, max_length,
+                           include_checklist, include_placeholders_block, include_safety)
+
+st.subheader("Generated prompt")
+st.caption("Copy this prompt and paste it into your AI chat tool.")
+st.code(prompt_text, language="markdown")
+
+st.download_button(
+    "Download prompt as .txt",
+    data=prompt_text.encode("utf-8"),
+    file_name="generated_prompt.txt",
+    mime="text/plain"
 )
 
 st.divider()
-if st.button("Generate Prompt", type="primary", use_container_width=True):
-    final_prompt = build_prompt(_task, _format, _tone, _audience)
-    st.session_state["final_prompt"] = final_prompt
-
-final_prompt = st.session_state.get("final_prompt")
-if final_prompt:
-    st.subheader("Your prompt")
-    st.text_area("", value=final_prompt, height=420, label_visibility="collapsed")
-
-    html(
-        f"""
-        <button id=\"copyBtn\" style=\"margin-top:10px;padding:8px 12px;border-radius:8px;border:1px solid #ddd;\">Copy to clipboard</button>
-        <script>
-        const btn = document.getElementById('copyBtn');
-        btn.addEventListener('click', async () => {{
-            const txt = `{final_prompt.replace('`', '\\`')}`;
-            try {{ await navigator.clipboard.writeText(txt); btn.textContent = 'Copied!'; }}
-            catch(e) {{ btn.textContent = 'Copy failed'; }}
-        }});
-        </script>
-        """,
-        height=60,
-    )
-
-    st.download_button(
-        "Download as .txt",
-        data=final_prompt,
-        file_name=f"generated_prompt_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
-
-st.caption("Built with Streamlit. Always review and edit the generated prompt to match the specific case and customer.")
+st.markdown("Made with ❤️ using Streamlit.")
