@@ -1,229 +1,101 @@
+import textwrap
+from datetime import datetime
 import streamlit as st
-from datetime import date
+from streamlit.components.v1 import html
 
-st.set_page_config(page_title="Manychat Prompt Builder", page_icon="✨", layout="wide")
 
-# ------------------------------
-# Presets tailored for Manychat
-# ------------------------------
-PRESETS = {
-    "Troubleshoot WABA onboarding": {
-        "role": "as a product specialist for WhatsApp (WABA)",
-        "tone": "in a calm and reassuring tone",
-        "audience": "customer",
-        "format": "numbered action steps",
-        "task": (
-            "Help a customer connect their WhatsApp Business Account to Manychat and resolve common onboarding "
-            "blockers (e.g., missing Business Verification, mismatched display name, phone number not eligible)."
-        ),
-        "extra": (
-            "Policy: follow Meta's WABA policies. Provide links as placeholder text like [link]. "
-            "Ask for exact error messages and screenshots. Offer safe, reversible steps only."
-        ),
-    },
-    "Billing & refund reply": {
-        "role": "as a billing & subscriptions specialist",
-        "tone": "in a professional tone",
-        "audience": "customer",
-        "format": "short email reply",
-        "task": (
-            "Draft a polite email responding to a refund request for a recent upgrade that the customer didn't intend."
-        ),
-        "extra": (
-            "Explain eligibility, proration, and next steps. Do not confirm a refund unless within policy. "
-            "Include placeholders for order ID and date."
-        ),
-    },
-    "Bug escalation to Engineering": {
-        "role": "as a technical support engineer",
-        "tone": "in a concise and direct tone",
-        "audience": "engineering team",
-        "format": "SOP checklist",
-        "task": (
-            "Prepare a minimal, reproducible bug report for a flow failing to send WhatsApp messages after a recent template update."
-        ),
-        "extra": (
-            "Include: environment, steps to reproduce, expected vs actual, logs/timeframes, user impact, severity, rollbacks/workarounds."
-        ),
-    },
+st.set_page_config(
+page_title="Generative AI Prompt Template Builder",
+page_icon="🤖",
+layout="centered",
+)
+
+
+# ---------- Helper: build the final prompt ----------
+
+
+def build_prompt(task: str, output_format: str, tone: str, audience: str) -> str:
+# Normalize blanks
+task = (task or "").strip()
+
+
+# Map human-readable format to an instruction
+format_instructions = {
+"email": "Write the response as a clear, well-structured email.",
+"Slack message": "Write the response as a concise Slack message (1–5 short paragraphs, use bullets when helpful).",
+"Slack post": "Write the response as a Slack post suitable for a channel announcement (title + short sections + bullet points).",
+"knowledge base article draft": (
+"Write the response as a knowledge base article draft (title, summary, prerequisites, step-by-step sections, and a short FAQ)."
+),
 }
 
-ROLE_OPTIONS = [
-    "as an experienced Manychat support agent",
-    "as a customer using WhatsApp Business via Manychat",
-    "as a product specialist for WhatsApp (WABA)",
-    "as a billing & subscriptions specialist",
-    "as a technical support engineer",
+
+tone_text = tone.strip() if tone else "in a professional and polite tone"
+
+
+# Compose a structured, model-friendly prompt
+prompt_sections = [
+"ROLE:",
+"You are a customer support agent.",
+"",
+"AUDIENCE:",
+f"Write to the {audience.strip() if audience else 'customer'}.",
+"",
+"TASK:",
+task if task else "<Describe the issue, error codes, context, history, previous attempts, and desired outcome>",
+"",
+"OUTPUT FORMAT:",
+format_instructions.get(output_format, "Provide the response in a clear and readable format."),
+"",
+"TONE:",
+f"Write {tone_text}.",
+"",
+"CONSTRAINTS & SAFETY:",
+"- Use customer-safe language; avoid internal jargon or sensitive info.",
+"- Replace private data with placeholders like <customer_name>, <ticket_id>, <order_number>.",
+"- If critical details are missing, ask clarifying questions first in a short list.",
+"- Be accurate, concise, and solution-oriented.",
+"- Prefer plain language; avoid long, complex sentences.",
+"",
+"QUALITY CHECK BEFORE FINALIZING:",
+"- Ensure the goal is explicit and the steps are actionable.",
+"- Confirm the tone matches the audience and channel.",
+"- Include next steps or links to relevant resources when appropriate.",
 ]
 
-FORMAT_OPTIONS = [
-    "numbered action steps",
-    "bullet points",
-    "short email reply",
-    "chat-style response",
-    "troubleshooting decision tree",
-    "knowledge base article draft",
-    "SOP checklist",
-]
 
-TONE_OPTIONS = [
-    "in a professional tone",
-    "in a friendly and empathetic tone",
-    "in a concise and direct tone",
-    "in a calm and reassuring tone",
-    "in a neutral, policy-aligned tone",
-]
+return "\n".join(prompt_sections).strip()
 
-AUDIENCE_OPTIONS = [
-    "customer",
-    "prospective customer",
-    "Manychat employee",
-    "fellow support agent",
-    "engineering team",
-    "partner (Meta/agency)",
-]
 
-SCOPE_TYPES = ["No time scope", "Date range", "Last N days"]
 
-# ------------------------------
-# Sidebar
-# ------------------------------
-with st.sidebar:
-    st.title("✨ Prompt Builder")
-    st.caption("Design precise prompts for customer support and internal comms.")
 
-    preset = st.selectbox("Quick preset", ["(None)"] + list(PRESETS.keys()))
-    st.markdown("---")
-    st.subheader("Options")
-    quality_bar = st.toggle("Include quality bar", value=True)
-    ref_sources = st.toggle("Allow reference placeholders", value=True)
-    placeholders = st.toggle("Use ID placeholders", value=True)
+# ---------- UI ----------
 
-# Load preset values
-if "state" not in st.session_state:
-    st.session_state.state = {}
 
-if preset != "(None)":
-    p = PRESETS[preset]
-    st.session_state.state.update(
-        role=p["role"], tone=p["tone"], audience=p["audience"], format=p["format"], task=p["task"], extra=p["extra"]
-    )
+st.title("Generative AI Prompt Template Builder")
+st.caption("Create effective, safe prompts for support use-cases — fast.")
 
-# ------------------------------
-# Main layout
-# ------------------------------
-col1, col2 = st.columns([1, 1])
 
-with col1:
-    st.header("Basics")
-    role = st.selectbox("Role", ROLE_OPTIONS, index=ROLE_OPTIONS.index(st.session_state.state.get("role", ROLE_OPTIONS[0])))
-    audience = st.selectbox(
-        "Audience", AUDIENCE_OPTIONS, index=AUDIENCE_OPTIONS.index(st.session_state.state.get("audience", AUDIENCE_OPTIONS[0]))
-    )
-    tone = st.selectbox("Tone", TONE_OPTIONS, index=TONE_OPTIONS.index(st.session_state.state.get("tone", TONE_OPTIONS[1])))
-    fmt = st.selectbox(
-        "Format", FORMAT_OPTIONS, index=FORMAT_OPTIONS.index(st.session_state.state.get("format", FORMAT_OPTIONS[0]))
-    )
-    task = st.text_area(
-        "Task",
-        st.session_state.state.get(
-            "task",
-            "Diagnose and resolve a customer's issue with WhatsApp template approval not showing up inside Manychat.",
-        ),
-        height=120,
-    )
+with st.expander("Tips for best results", expanded=True):
+st.markdown(
+"""
+1. **Keep customer-safe language**; avoid internal jargon or sensitive information. Use placeholders instead of private data.
+2. **Ensure all important info is in the _Task_ field** (context, issue description, error codes, account IDs, links, constraints, etc.).
+3. **Make your goal explicit and specific** (what a great answer looks like, success criteria, and any limits like word count or format).
+"""
+)
 
-    st.subheader("Scope & constraints")
-    scope_type = st.radio("Scope", SCOPE_TYPES, horizontal=True)
-    scope_text = ""
-    if scope_type == "Date range":
-        c1, c2 = st.columns(2)
-        with c1:
-            start = st.date_input("Start date", value=date.today())
-        with c2:
-            end = st.date_input("End date", value=date.today())
-        scope_text = f"Within the timeframe {start.isoformat()} to {end.isoformat()}."
-    elif scope_type == "Last N days":
-        n = st.number_input("Last N days", min_value=1, value=14)
-        scope_text = f"Focus on events from the last {int(n)} days."
 
-    extra = st.text_area(
-        "Any additional information",
-        st.session_state.state.get(
-            "extra",
-            """
-Product context: Manychat with WhatsApp (WABA).
-User context: SMB marketer with limited technical background.
-Constraints: Follow Meta and Manychat policies; avoid exposing internal-only details.
-Ask for: affected workspace, relevant template name, phone number, exact error text, screenshots, and timestamps in UTC.
-If troubleshooting, provide reversible steps and warn about possible side-effects.
-            """.strip(),
-        ),
-        height=160,
-    )
+st.subheader("Build your prompt")
 
-with col2:
-    st.header("Generated prompt")
 
-    parts = []
-    parts.append(f"Act {role}. Write for the {audience} {tone}.")
-    if scope_text:
-        parts.append(scope_text)
-    parts.append(f"Task: {task}")
-    parts.append(f"Preferred format: {fmt}.")
+# Fixed Role (shown for clarity)
+st.text_input("Role", value="customer support agent", disabled=True, help="This tool is designed for support agents.")
 
-    if extra.strip():
-        parts.append("Additional context:\n" + extra.strip())
 
-    if quality_bar:
-        parts.append(
-            """
-Quality bar:
-- Be accurate and policy-aligned; never guess customer-specific data.
-- Provide clear next steps and highlight irreversible actions.
-- Flag when additional data is required and list exactly what is needed.
-- Prefer structured outputs (lists, tables, checklists) to speed execution.
-            """.strip()
-        )
-
-    if ref_sources:
-        parts.append(
-            """
-If relevant, reference official documentation with short titles and placeholder links like [Manychat Help Center] or [Meta Business Help Center].
-Do not fabricate links or private/internal URLs.
-            """.strip()
-        )
-
-    if placeholders:
-        parts.append(
-            """
-Use placeholders for sensitive identifiers, e.g., {workspace_id}, {waba_id}, {template_name}, {phone_number}, {order_id}.
-            """.strip()
-        )
-
-    parts.append(
-        """
-Output requirements:
-- Provide a complete answer. If information is missing, clearly list the exact questions to ask the user to proceed.
-- Keep reasoning brief and user-facing; do not include hidden deliberation steps.
-- End with a short checklist of next actions (who does what, by when).
-        """.strip()
-    )
-
-    prompt_text = "\n\n".join(parts)
-
-    st.text_area("Copy-ready prompt", prompt_text, height=420)
-    st.download_button("Download .txt", data=prompt_text.encode("utf-8"), file_name="manychat-prompt.txt")
-
-    st.markdown("---")
-    st.subheader("Tips for best results")
-    st.markdown(
-        """
-- Be specific with product areas (e.g., “WhatsApp Template messages”, “Partner-initiated WABA creation”).
-- Mention exact error texts, timestamps (UTC), and the user's goal in one sentence.
-- Choose a structured format (action steps / checklist) when you need speed and clarity.
-- Keep customer-safe language; avoid internal jargon. Add placeholders instead of private data.
-        """
-    )
-
-st.caption("Built for Manychat support workflows. Paste the prompt into your preferred AI chat tool.")
+# Task
+_task = st.text_area(
+"Task",
+placeholder=(
+"Describe the situation clearly: context, issue, error codes, impacted customer(s), prior steps taken, "
+)
